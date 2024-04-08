@@ -1,0 +1,183 @@
+---
+title: "linear regression"
+author: "ziyue zhou"
+date: "2023-10-12"
+output: powerpoint_document
+---
+
+import raw data
+```{r setup, include=FALSE}
+install.packages("corrplot")
+library(corrplot)
+library(tidyverse)
+library(dplyr)
+options(scipen = 999)
+theme_set(theme_bw())
+red_wine=read.csv('C:\\Users\\周子越\\Desktop\\新建文件夹\\winequality-red.csv', sep = ';')
+white_wine=read.csv('C:\\Users\\周子越\\Desktop\\新建文件夹\\winequality-white.csv', sep = ';')
+```
+
+data cleaning +change categorical column to numerical column
+```{r}
+red_wine$type = 'red'
+white_wine$type = 'white'
+df = rbind(red_wine,white_wine)
+df$red_wine = ifelse(df$type == 'red', 1, 0)
+df <- select(df, -type)
+#test missing data
+any(is.na(df))
+```
+
+
+```{r}
+#summary statistic
+summary(df)
+#基本都是连续变量
+#局限是不能明显看出分布，回归分析是希望变量是normal distribution
+```
+
+linear-linear(full)
+creating model
+```{r}
+# Using lm() for multiple regression
+model <- lm(quality ~., data = df)
+
+# Summary of the model to see coefficients and other statistics
+summary(model)
+
+```
+
+
+delete citric.acid and chlorides 
+```{r}
+# 获取摘要
+summary_lm <- summary(model)
+
+# 删除 citric.acid 和 chlorides 的摘要行
+# 使用 subset() 函数来排除这两行
+# 使用update()函数删除citric.acid和chlorides
+model_updated <- update(model, . ~ . - citric.acid - chlorides)
+
+summary(model_updated)
+
+```
+heatmap 
+对于target有哪些较强的相关性有没有multi-collineary的情况，如果有怎么处理
+```{r}
+#install the package
+install.packages("corrplot")
+install.packages("ggplot2")
+library(corrplot)
+library(ggplot2)
+
+```
+
+Q-Q plot
+```{r}
+hist(df$fixed.acidity)
+qqnorm(df$fixed.acidity)
+```
+```{r}
+# 画 boxplot, alternatively 也可以画histogram
+
+# arrange几张图占一面
+par(mfrow = c(1,3)) # 这个说的事一个里面4个图,两个上面两个下面
+
+boxplot(df$fixed.acidity)
+boxplot(df$citric.acid )
+boxplot(df$residual.sugar)
+boxplot(df$chlorides)
+boxplot(df$free.sulfur.dioxide)
+boxplot(df$total.sulfur.dioxide)
+boxplot(df$density)
+boxplot(df$sulphates)
+boxplot(df$alcohol)
+boxplot(df$quality )
+```
+
+
+```{r}
+library(ggcorrplot)
+# 常规操作, pairwise correlation table
+
+# Table可以如何指导我们的linear regression:
+
+# 1. 哪些variable和dependent variable 联系紧密, 首先要选入模型. 只是最初选模型的参考,并不决定最终模型
+# 2. 观察independent variable 之间的联系. linear regression threat multicollinearity, 如果两个自变量高度相关, 考虑不要把两个同时放进去.最初的模型选择
+mcor = cor(df[,-13])
+mcor
+ggcorrplot(mcor)
+```
+
+```{r}
+# estimate a full model 
+# . 代替的是剩下的所有的变量
+fit = lm(quality~ ., data=df) # 建议使用
+fit1 = lm(quality ~ fixed.acidity + volatile.acidity + citric.acid +
+         residual.sugar + chlorides + sulphates +  alcohol  + free.sulfur.dioxide +
+           total.sulfur.dioxide + density + pH, data=df ) # 结果完全等价
+print(summary(fit))
+```
+## 模型的检测 Diagnostic Check
+
+Ordinary Least Square (OLS), 这个方法它成立的前提就是我们的assumption, 但是这些assumption不一定满足.因为不一定满足,所以我们要做检测
+
+* Linearity: Y和X是线性关系. **图一的红线是一个平的直线**
+
+* Independence: errors independent. study design或者说取样的方法决定的, 我们几乎没有办法通过数据进行检测, 在之前讨论一下取样方法,之后就默认这个假设满足就好了
+
+* Homoskedasticity: error方差不随x的变化变化, constant error variance **图一的点是不是越来越散开或者越来越收紧**
+
+* Normality: error的分布是正态分布  **图二的点是不是基本在线的两边**
+
+* 要求, 如果我们要估计的精准,我们是不希望有outlier  **图四看右下角和右上角, 虚线以内的部分**
+
+# 画什么样的图????
+
+Another concern is that strictly speaking, quality is an ordinal variable, so ordered Logit or Probit could be more appropriate. However, given we have about 10 levels for the data, it could be fine to treat it as a continuous variable and extract information based on the linear regression result. At last, we examine whether any assumption is violated in the regression. The residual fitted plot suggests linearity assumption is not violated and the constant variance assumption is also reasonable. The Normal Q-Q plot suggests the normality assumption is satisfied. The residual leverage plot suggests we do not have outliers, which have both high leverage and high residuals. The regression model is thus acceptable.
+
+```{r}
+plot(fit)
+```
+
+```{r}
+intercept_only = lm(quality ~ 1, data=df)
+all <- lm(quality ~ ., data=df) # 首先选取起始模型
+forward <- step(intercept_only, direction='forward', scope=formula(all), trace=0)
+summary(forward)
+# 会发现比之前的full model少了一个变量
+```
+```{r}
+backward <- step(all, direction='backward', scope=formula(all), trace=0)
+summary(backward)
+```
+```
+```{r}
+
+```{r}
+library(glmnet)
+train = df
+train$type = as.numeric(train$type=="red")
+grid = 10^seq(10, -2, length = 100)
+lasso = glmnet(train[,-12], train$quality,alpha = 1,
+lambda = grid)
+cv.out = cv.glmnet(as.matrix(train[,-12]), train$quality, alpha = 1) # cross validation
+lasso = glmnet(train[,-12], train$quality, alpha = 1,
+lambda = cv.out$lambda.min) # use best lambda obtained by cross validation
+print("Lasso selects the following variables")
+coefs = coef(lasso)
+print(coefs[coefs[,1]!=0,])
+
+```
+```{r}
+library(gap)
+y1 = red$quality
+y2 = white$quality
+x1 = as.matrix(red[,c(-12, -13)])
+x2 = as.matrix(white[,c(-12, -13)])
+chow.test(y1,x1,y2,x2)
+```
+```
+
+
+
