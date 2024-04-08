@@ -1,0 +1,285 @@
+---
+title: "Tasting Wine From a Data Perspective"
+output: pdf_document
+date: "2023-04-15"
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+```
+
+## Abstract
+
+Evaluating the quality of a wine can be a challenging task, even for
+seasoned wine enthusiasts. Traditionally, professional connoisseurs have
+been responsible for determining the quality of wines. However, with the
+increasing availability of data, it is now possible for individuals to
+assess wine quality without even tasting the wine itself. By leveraging
+various data analysis techniques, this report investigates the
+correlations between wine quality and an array of physicochemical
+(input) and sensory (output) variables. Consequently, anyone with the
+requisite data skills can become a wine expert, empowering them to make
+informed decisions when selecting a fine wine.
+
+## Chapter 1 Introduction
+
+Assessing the quality of a wine can be a complex endeavor, even for the
+most passionate wine enthusiasts. Traditionally, expert professionals
+have been responsible for rating the quality of wines. However, the
+increasing availability of data now allows us to evaluate wine quality
+without the need for actual tasting. This report employs a range of data
+analysis techniques to explore the relationships between wine quality
+and various physicochemical (input) and sensory (output) variables,
+empowering anyone with the appropriate data skills to become a wine
+expert.
+
+The primary motivation behind this report is to harness the power of
+data analysis for determining wine quality. Specifically, the report
+delves into the relationships between variables that characterize wines,
+and subsequently utilizes these variables to explain or predict wine
+quality. A diverse set of statistical techniques is employed, including
+comparison of two samples, analysis of variance, categorical data
+analysis, linear regression, resampling methods, linear model selection
+and regularization, as well as moving beyond linearity. A comprehensive
+overview of these techniques is presented in Chapter 3, while the
+findings are detailed in Chapter 4.
+
+## Chapter 2 Data Description
+
+According to the official description on
+<https://archive.ics.uci.edu/ml/datasets/wine+quality>, the wine quality
+data set consists of two files, one for the red wine and one for the
+white wine. Both files include physicochemical (inputs) and sensory (the
+output) variables and the quality of wine. The data is collected on
+Portuguese "Vinho Verde" wine. The abundance of features allow readers
+to understand the wine from a statistical perspective. Firstly, the
+summary statistics is provided below. It is beneficial to also use
+boxplot to visualize the data and detect potential outliers. The theory
+suggests that points beyond the whisker of the boxplot could be
+potential outliers. Nevertheless, if the data does not follow a normal
+distribution, we could see many points beyond the whisker, as seen in
+the plots below. I cross checked the accuracy of the data and it
+indicates those are valid observations, thus no observations are
+dropped. The plots do tell us that most of the distributions are
+right-skewed, so transformation might be needed if we want the
+distribution to resemble a normal distribution. Using the is.na()
+function, we also see the data has no missing value. Thus, the data
+exploration suggests we keeping the data as is. 根据
+<https://archive.ics.uci.edu/ml/datasets/wine+quality> =
+
+```{r}
+red = read.csv("winequality-red.csv", sep=";")
+white = read.csv("winequality-white.csv", sep=";")
+
+red$type = "red"
+white$type = "white"
+wine = rbind(red, white)
+any(is.na(wine))
+summary(wine)
+```
+
+```{r}
+# ggplot
+hist(wine$fixed.acidity)
+qqnorm(wine$fixed.acidity)
+```
+
+```{r}
+par(mfrow = c(1,3))
+
+boxplot(wine$fixed.acidity)
+boxplot(wine$citric.acid )
+boxplot(wine$residual.sugar)
+boxplot(wine$chlorides)
+boxplot(wine$free.sulfur.dioxide)
+boxplot(wine$total.sulfur.dioxide)
+boxplot(wine$density)
+boxplot(wine$sulphates)
+boxplot(wine$alcohol)
+boxplot(wine$quality )
+```
+
+### 4.4 Linear Regression
+
+The above analysis is bivariate or univariate analysis, which fails to
+consider relationship among multiple variables. For example, one could
+be interested in the marginal effect of residual sugar level on quality,
+holding other variables constant. However, this cannot be done with the
+above analysis, as the residual sugar level tends to be correlated with
+other variables. To avoid include highly correlated variables that could
+inflate the standard errors, we first check the correlation matrix. To
+facilitate the process, the visualization is also presented. The graph
+suggests the pairwise correlation between independent variables appears
+to be moderate, with some pairwise correlation greater than 0.5. It is
+thus acceptable to include all variables in the linear regression at the
+current stage.
+
+```{r}
+library(ggcorrplot)
+mcor = cor(wine[,-13])
+mcor
+ggcorrplot(mcor)
+```
+
+We then run a linear regression with quality as the dependent variable
+and all other variables are the independent variables. The model
+suggests, Ceteris Paribus, high quality is associated with high fixed
+acidity, low volatile acidity, low citric acid, high residual sugar,
+less chlorides, high free sulfur dioxide, low total sulfur dioxide, low
+density, high pH, high sulphates, high alcohol level, and being the type
+of red wine.
+
+```{r}
+# estimate a full model 
+fit = lm(quality~ ., data=wine)
+fit1 = lm(quality ~ fixed.acidity + volatile.acidity + citric.acid +
+         residual.sugar + chlorides + sulphates +  alcohol + type + free.sulfur.dioxide +
+           total.sulfur.dioxide + density + pH, data=wine )
+print(summary(fit))
+```
+
+## Diagnostic Check
+
+Another concern is that strictly speaking, quality is an ordinal
+variable, so ordered Logit or Probit could be more appropriate. However,
+given we have about 10 levels for the data, it could be fine to treat it
+as a continuous variable and extract information based on the linear
+regression result. At last, we examine whether any assumption is
+violated in the regression. The residual fitted plot suggests linearity
+assumption is not violated and the constant variance assumption is also
+reasonable. The Normal Q-Q plot suggests the normality assumption is
+satisfied. The residual leverage plot suggests we do not have outliers,
+which have both high leverage and high residuals. The regression model
+is thus acceptable.
+
+```{r}
+plot(fit)
+```
+
+### Chapter 4.6 Linear Model Selection and Regularization
+
+Firstly, construct a linear regression model named intercept_only using
+the lm function with only an intercept term as the predictor, and set
+the target variable as quality. Next, construct a linear regression
+model named all using the lm function with all variables in the wine
+dataset as predictors, and set the target variable as quality. Then, use
+the step function to perform forward stepwise regression starting from
+the intercept_only model, with the direction set to forward
+(direction='forward') and the search scope limited to the all model
+(scope=formula(all)). During the forward stepwise regression process,
+the model with the smallest Akaike Information Criterion (AIC) value is
+chosen as the current best model, and predictors are sequentially added
+to this model until further improvement in AIC value is not possible. At
+each step, the current model's predictor variables, residual sum of
+squares (RSS), and AIC value are outputted to aid in model selection.
+The final output is the model obtained through forward stepwise
+regression with the smallest AIC value, which includes the predictor
+variables needed for predicting the target variable quality.
+
+```{r}
+intercept_only = lm(quality ~ 1, data=wine)
+all <- lm(quality ~ ., data=wine)
+forward <- step(intercept_only, direction='forward', scope=formula(all), trace=0)
+summary(forward)
+```
+
+Using AIC as the default information criterion, we select the model with
+the lowest AIC, which is quality \~ alcohol + volatile.acidity +
+sulphates + residual.sugar + type + density + free.sulfur.dioxide +
+total.sulfur.dioxide + chlorides + pH + fixed.acidity. The advantage of
+this approach is that it automatically selects the optimal combination
+of predictor variables, reducing the complexity of the model and
+improving its predictive performance. However, it should be noted that
+forward stepwise regression method may have some limitations, such as
+potential issues with overfitting, so caution should be exercised when
+interpreting and using the model results, and further validation and
+verification should be performed. Nevertheless, forward stepwise
+selection may present different results as the backward selection, so we
+also select the model using backward selection and the same information
+criterion. The result shows that the model selected is the same.
+
+```{r}
+backward <- step(all, direction='backward', scope=formula(all), trace=0)
+summary(backward)
+```
+
+Likewise, since the linear regression could over fit the model when the
+number of variables is large compared to the number of samples. Another
+feature selection method would be using LASSO regularization. This is
+because the penalty on the norm of the parameters would shrink some
+parameters to 0, effectively achieving dropping necessary variables.
+Since the magnitude of the penalty term can greatly affect which model
+is finally selected, we use the cross validation to select the best
+penalty value, and then use this value to fit the final model. The final
+model, along with the estimated coefficients, is presented below.
+
+```{r}
+library(glmnet)
+train = wine
+train$type = as.numeric(train$type=="red")
+grid = 10^seq(10, -2, length = 100)
+lasso = glmnet(train[,-12], train$quality,alpha = 1,
+lambda = grid)
+cv.out = cv.glmnet(as.matrix(train[,-12]), train$quality, alpha = 1) # cross validation
+lasso = glmnet(train[,-12], train$quality, alpha = 1,
+lambda = cv.out$lambda.min) # use best lambda obtained by cross validation
+print("Lasso selects the following variables")
+coefs = coef(lasso)
+print(coefs[coefs[,1]!=0,])
+
+```
+
+### Chapter 4.7 Moving Beyond Linearity
+
+Notice that the residual fitted plot in the previous section suggests
+the model is linear, so there is not much need to add higher order
+terms. To do this, we could use polynomial regression or manually
+generate higher order variables and include them in the model.
+Nevertheless, a valid concern is that the coefficient of different
+variables could differ for red wine and white wine. One must decide
+whether it is better to run one pooled regression or two separate
+regression. We use Chow test to detect whether such structural break
+exists. The p value is less than 0.05, suggesting a structural break
+exists, and it would be more suitable to fit two separate models for red
+wine and white wine.
+
+```{r}
+library(gap)
+y1 = red$quality
+y2 = white$quality
+x1 = as.matrix(red[,c(-12, -13)])
+x2 = as.matrix(white[,c(-12, -13)])
+chow.test(y1,x1,y2,x2)
+```
+
+## Chapter 5 Conclusion
+
+The report uses different characteristics to explain/predict the wine
+quality. By comparing two samples, we understand how the red wine
+differs from the white wine in different dimension. The analysis of
+variance tells that the quality ranking is informational, as wines with
+different quality shows significantly different characteristics. The
+analysis of categorical data reveals whether two categorical variables
+are independent. The linear regression uncovers how those variables are
+positively or negatively lined to the outcome variable. We use the
+resampling methods to choose the model and see whether the previous
+model could overfit, by performing cross validation. We also select
+alternative models based on stepwise selection and LASSO regularization.
+At last, we discuss whether the pooled model is suitable, as the
+coefficients for variables could differ between red wine and white wine.
+The Chow test result suggests it would be more suitable to fit two
+separate models for red wine and white wine.
+
+## Chapter 6 References
+
+<https://archive.ics.uci.edu/ml/datasets/wine+quality>
+<https://doi.org/10.1093/ajae/aau057>
+<https://extension.psu.edu/volatile-acidity-in-wine>
+<https://waterhouse.ucdavis.edu/whats-in-wine/fixed-acidity>
+<https://doi.org/10.1016/j.fm.2012.10.004>
+<https://www.vintecclub.com/en-au/wine-articles/wine-science/sulfites-in-wine---necessary-or-evil/>
+<https://www.bibendum-wine.co.uk/wine-gym/wine-and-residual-sugar/>
+<https://morewinemaking.com/articles/SO2_management>
+<https://www.extension.iastate.edu/wine/total-sulfur-dioxide-why-it-matters-too/>
