@@ -1,0 +1,78 @@
+---
+title: "eda1"
+author: "ziyue zhou"
+date: "2023-10-08"
+output: html_document
+---
+```{r}
+library(tidyverse)
+theme_set(theme_bw())
+red_wine=read.csv('C:\\Users\\周子越\\Desktop\\新建文件夹\\winequality-red.csv', sep = ';')
+white_wine=read.csv('C:\\Users\\周子越\\Desktop\\新建文件夹\\winequality-white.csv', sep = ';')
+```
+
+
+Combine red_wine data and white_wine into one data frame
+```{r}
+red_wine$type = 'red'
+white_wine$type = 'white'
+df = rbind(red_wine,white_wine)
+```
+
+dependent variable:Wine Type
+
+Looking at the pattern of missing data:
+
+```{r}
+visdat::vis_miss(df) + coord_flip() + theme(legend.position = "none")
+```
+
+
+
+```{r}
+numeric_df = df %>% 
+  select(-type)
+
+#ggplot(red_wine, aes(y = density)) +
+  #geom_boxplot() +
+  #labs(title = "Boxplot of column_name", y = "Values")
+par(mfrow=c(2,5))
+for (i in 1:length(numeric_df)) {
+        boxplot(numeric_df[,i], main=names(numeric_df[i]), type="l")
+  
+
+}
+
+```
+
+```{r}
+df |> drop_na() |> ggplot() + aes(y = type, x = quality) + 
+  geom_boxplot()
+
+```
+
+```{r}
+variable <- names(df)
+values_to_remove <- c("quality", "type")
+variable <- variable[!variable %in% values_to_remove]
+```
+
+
+
+```{r}
+
+df |> 
+  pivot_longer(cols = variable,
+               names_to = "variable", values_to = "values") |> 
+  drop_na() |> ggplot() + 
+  aes(x = values, y = quality, colour = type) + 
+  geom_point(alpha = 0.3) + 
+  facet_grid(~ variable, scales = "free_x") + 
+  scale_colour_brewer(palette = "Set1") + 
+  geom_smooth(method = "lm", se = FALSE) + 
+  theme(legend.position = "top",axis.text.x = element_text(size = 5)) 
+
+
+
+```
+
